@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Mic, MicOff, Square } from "lucide-react";
+import { Send, Mic, Square, History, Plus, ChevronLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface Message {
   id: string;
@@ -9,6 +11,14 @@ interface Message {
   content: string;
   timestamp: Date;
 }
+
+interface Conversation {
+  id: string;
+  title: string | null;
+  created_at: string;
+}
+
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/jarvis-chat`;
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -18,17 +28,13 @@ function getGreeting() {
 }
 
 export default function JarvisChat() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: `${getGreeting()}, Fredrik. What are we building today?`,
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -43,7 +49,77 @@ export default function JarvisChat() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  const sendMessage = () => {
+  // Load conversation list
+  useEffect(() => {
+    loadConversations();
+  }, []);
+
+  // Show welcome message when no conversation
+  useEffect(() => {
+    if (!conversationId && messages.length === 0) {
+      setMessages([
+        {
+          id: "welcome",
+          role: "assistant",
+          content: `${getGreeting()}, Fredrik. What are we building today?`,
+          timestamp: new Date(),
+        },
+      ]);
+    }
+  }, [conversationId]);
+
+  async function loadConversations() {
+    const { data } = await supabase
+      .from("conversations")
+      .select("id, title, created_at")
+      .order("updated_at", { ascending: false })
+      .limit(50);
+    if (data) setConversations(data);
+  }
+
+  async function loadConversation(id: string) {
+    const { data } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("conversation_id", id)
+      .order("created_at", { ascending: true });
+
+    if (data) {
+      setMessages(
+        data.map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          timestamp: new Date(m.created_at),
+        }))
+      );
+      setConversationId(id);
+      setShowHistory(false);
+    }
+  }
+
+  async function startNewConversation() {
+    setConversationId(null);
+    setMessages([
+      {
+        id: "welcome",
+        role: "assistant",
+        content: `${getGreeting()}, Fredrik. What are we building today?`,
+        timestamp: new Date(),
+      },
+    ]);
+    setShowHistory(false);
+  }
+
+  async function saveMessage(convId: string, role: string, content: string) {
+    await supabase.from("messages").insert({
+      conversation_id: convId,
+      role,
+      content,
+    });
+  }
+
+  const sendMessage = async () => {
     const text = input.trim();
     if (!text || isLoading) return;
 
@@ -53,22 +129,127 @@ export default function JarvisChat() {
       content: text,
       timestamp: new Date(),
     };
-    setMessages((prev) => [...prev, userMsg]);
+
+    // Filter out welcome message for API
+    const realMessages = messages.filter((m) => m.id !== "welcome");
+    setMessages((prev) => [...prev.filter((m) => m.id !== "welcome"), userMsg]);
     setInput("");
     setIsLoading(true);
 
-    // Simulate Jarvis response (replace with actual API call)
-    setTimeout(() => {
-      const jarvisMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content:
-          "I hear you. Once we connect to the AI backend, I'll be fully operational. For now, the interface is ready — let's wire me up next.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, jarvisMsg]);
+    try {
+      // Create or reuse conversation
+      let convId = conversationId;
+      if (!convId) {
+        const title = text.slice(0, 80);
+        const { data } = await supabase
+          .from("conversations")
+          .insert({ title })
+          .select("id")
+          .single();
+        if (!data) throw new Error("Failed to create conversation");
+        convId = data.id;
+        setConversationId(convId);
+        loadConversations();
+      }
+
+      // Save user message
+      await saveMessage(convId, "user", text);
+
+      // Build messages for API
+      const apiMessages = [
+        ...realMessages.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user" as const, content: text },
+      ];
+
+      // Stream response
+      const resp = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ messages: apiMessages }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Request failed" }));
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+
+      if (!resp.body) throw new Error("No response body");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = "";
+      let assistantSoFar = "";
+      let streamDone = false;
+
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") {
+            streamDone = true;
+            break;
+          }
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              assistantSoFar += content;
+              const currentContent = assistantSoFar;
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last?.role === "assistant" && last.id === "streaming") {
+                  return prev.map((m, i) =>
+                    i === prev.length - 1 ? { ...m, content: currentContent } : m
+                  );
+                }
+                return [
+                  ...prev,
+                  { id: "streaming", role: "assistant" as const, content: currentContent, timestamp: new Date() },
+                ];
+              });
+            }
+          } catch {
+            textBuffer = line + "\n" + textBuffer;
+            break;
+          }
+        }
+      }
+
+      // Finalize streaming message
+      if (assistantSoFar) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === "streaming" ? { ...m, id: Date.now().toString() } : m
+          )
+        );
+        await saveMessage(convId, "assistant", assistantSoFar);
+        // Update conversation title if it was auto-generated
+        await supabase
+          .from("conversations")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", convId);
+      }
+    } catch (err: any) {
+      console.error("Jarvis error:", err);
+      toast.error(err.message || "Failed to get response from Jarvis");
+    } finally {
       setIsLoading(false);
-    }, 1200);
+    }
   };
 
   const toggleRecording = () => {
@@ -81,7 +262,7 @@ export default function JarvisChat() {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Speech recognition not supported in this browser.");
+      toast.error("Speech recognition not supported in this browser.");
       return;
     }
 
@@ -111,14 +292,73 @@ export default function JarvisChat() {
     }
   };
 
+  // History sidebar for mobile
+  if (showHistory) {
+    return (
+      <div className="flex flex-col h-full bg-background">
+        <header className="flex items-center gap-3 px-4 py-3 border-b border-border">
+          <button onClick={() => setShowHistory(false)} className="text-muted-foreground">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h2 className="font-heading font-semibold text-sm">Conversation History</h2>
+        </header>
+        <div className="flex-1 overflow-y-auto">
+          <button
+            onClick={startNewConversation}
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-primary font-medium border-b border-border hover:bg-muted/50"
+          >
+            <Plus className="w-4 h-4" /> New Conversation
+          </button>
+          {conversations.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => loadConversation(c.id)}
+              className={`w-full text-left px-4 py-3 text-sm border-b border-border hover:bg-muted/50 transition-colors ${
+                c.id === conversationId ? "bg-muted" : ""
+              }`}
+            >
+              <p className="font-medium text-foreground truncate">{c.title || "Untitled"}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {new Date(c.created_at).toLocaleDateString()}
+              </p>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Header — mobile only */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border">
-        <h1 className="font-heading text-base font-semibold">
-          Bayati<span className="text-primary">OS</span>
-        </h1>
-        <span className="text-xs text-muted-foreground">Jarvis</span>
+      {/* Header */}
+      <header className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-3">
+          <h1 className="font-heading text-base font-semibold md:hidden">
+            Bayati<span className="text-primary">OS</span>
+          </h1>
+          <span className="text-xs text-muted-foreground hidden md:inline">
+            Jarvis — {conversationId ? "Conversation" : "New Chat"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={startNewConversation}
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="New conversation"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => {
+              loadConversations();
+              setShowHistory(true);
+            }}
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="History"
+          >
+            <History className="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
       {/* Messages */}
@@ -132,15 +372,16 @@ export default function JarvisChat() {
               transition={{ duration: 0.25 }}
               className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
-              <div className={`flex gap-3 max-w-[85%] md:max-w-[70%] ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                {/* Avatar */}
+              <div
+                className={`flex gap-3 max-w-[85%] md:max-w-[70%] ${
+                  msg.role === "user" ? "flex-row-reverse" : ""
+                }`}
+              >
                 {msg.role === "assistant" && (
                   <div className="w-7 h-7 rounded-full bg-chat-jarvis flex items-center justify-center shrink-0 mt-1">
                     <span className="text-xs font-semibold text-sidebar-accent">J</span>
                   </div>
                 )}
-
-                {/* Bubble */}
                 <div
                   className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                     msg.role === "user"
@@ -161,13 +402,8 @@ export default function JarvisChat() {
           ))}
         </AnimatePresence>
 
-        {/* Loading indicator */}
-        {isLoading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex items-center gap-3"
-          >
+        {isLoading && messages[messages.length - 1]?.id !== "streaming" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3">
             <div className="w-7 h-7 rounded-full bg-chat-jarvis flex items-center justify-center shrink-0">
               <span className="text-xs font-semibold text-sidebar-accent">J</span>
             </div>
