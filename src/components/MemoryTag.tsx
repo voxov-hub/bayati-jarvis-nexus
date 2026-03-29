@@ -77,7 +77,7 @@ export function MemoryTag({ tag, messageTopic }: MemoryTagProps) {
   return (
     <div className="relative mt-1.5 flex items-center gap-1" ref={dropdownRef}>
       <span className="text-[11px] text-muted-foreground/60 select-none">
-        📁 {tag}
+        📁 {toDisplayName(tag)}
       </span>
       <button
         onClick={openEditor}
