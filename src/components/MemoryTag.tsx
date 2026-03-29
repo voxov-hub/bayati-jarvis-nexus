@@ -1,9 +1,25 @@
 import { useState, useEffect, useRef } from "react";
-import { Pencil, Check, X, FolderOpen } from "lucide-react";
+import { Pencil, Check, FolderOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const MEMORY_BASE = "https://pipeline.voxovdesign.com/jarvis/memory";
 
+const DISPLAY_NAMES: Record<string, string> = {
+  "fredrik-profile": "Fredrik — Profile",
+  "voxov-brand": "Voxov — Brand Identity",
+  "voxov-design": "Voxov — Storefront",
+  "voxov-social": "Voxov — Social",
+};
+
+function toDisplayName(slug: string): string {
+  if (DISPLAY_NAMES[slug]) return DISPLAY_NAMES[slug];
+  // Derive: split on first hyphen as "group - detail", capitalise words
+  const parts = slug.split("-");
+  const group = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+  if (parts.length === 1) return group;
+  const detail = parts.slice(1).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return `${group} — ${detail}`;
+}
 interface MemoryTagProps {
   tag: string;
   messageTopic: string;
@@ -61,7 +77,7 @@ export function MemoryTag({ tag, messageTopic }: MemoryTagProps) {
   return (
     <div className="relative mt-1.5 flex items-center gap-1" ref={dropdownRef}>
       <span className="text-[11px] text-muted-foreground/60 select-none">
-        📁 {tag}
+        📁 {toDisplayName(tag)}
       </span>
       <button
         onClick={openEditor}
@@ -72,7 +88,7 @@ export function MemoryTag({ tag, messageTopic }: MemoryTagProps) {
       </button>
 
       {editing && (
-        <div className="absolute bottom-full left-0 mb-1 w-48 bg-card border border-border rounded-lg shadow-lg z-50 py-1 max-h-48 overflow-y-auto">
+        <div className="absolute bottom-full left-0 mb-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50 py-1 max-h-48 overflow-y-auto">
           {loading ? (
             <p className="text-xs text-muted-foreground px-3 py-2">Loading…</p>
           ) : projects.length === 0 ? (
@@ -87,7 +103,7 @@ export function MemoryTag({ tag, messageTopic }: MemoryTagProps) {
                 }`}
               >
                 <FolderOpen className="w-3 h-3 shrink-0" />
-                {p}
+                {toDisplayName(p)}
                 {p === tag && <Check className="w-3 h-3 ml-auto text-primary" />}
               </button>
             ))
