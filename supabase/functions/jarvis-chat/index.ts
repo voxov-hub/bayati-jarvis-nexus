@@ -15,6 +15,9 @@ When Fredrik talks to you, respond with intelligence and initiative. Don't just 
 
 You have access to persistent memory files for multiple projects. Use them to stay contextually aware. When Fredrik discusses something, automatically identify which project it relates to based on the conversation content.
 
+WEB SEARCH:
+You have access to a web search tool. Use it automatically when the question requires current, real-time information — trends, competitor analysis, pricing, news, social media content research, hashtag performance, what specific accounts are posting. Do NOT search for things you already know from your loaded memory files. When you use search results, cite sources naturally inline — "according to [source]" — not formal citations.
+
 MEMORY TAGGING:
 At the very end of EVERY response, you MUST append a memory tag on its own line in this exact format:
 <!--memory_tag:project-slug-->
@@ -208,6 +211,7 @@ serve(async (req) => {
         max_tokens: 4096,
         system: fullSystemPrompt,
         messages: anthropicMessages,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
         stream: true,
       }),
     });
@@ -231,6 +235,8 @@ serve(async (req) => {
     let fullAssistantResponse = "";
     const isSaveCommand = command.type === "save";
 
+    let isSearching = false;
+
     const transformStream = new TransformStream({
       transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
@@ -244,6 +250,17 @@ serve(async (req) => {
           try {
             const event = JSON.parse(jsonStr);
 
+            // Detect web search start
+            if (event.type === "content_block_start" && event.content_block?.type === "web_search_tool_use") {
+              if (!isSearching) {
+                isSearching = true;
+                const searchChunk = {
+                  choices: [{ delta: { content: "🔍 Searching the web...\n\n" } }],
+                };
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(searchChunk)}\n\n`));
+              }
+            }
+
             if (event.type === "content_block_delta" && event.delta?.text) {
               if (isSaveCommand) fullAssistantResponse += event.delta.text;
               const openAiChunk = {
@@ -252,7 +269,6 @@ serve(async (req) => {
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(openAiChunk)}\n\n`));
             } else if (event.type === "message_stop") {
               controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
-              // After stream ends, save session if needed
               if (isSaveCommand && fullAssistantResponse) {
                 handleSaveSession(fullAssistantResponse);
               }
