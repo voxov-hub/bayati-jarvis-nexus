@@ -208,6 +208,7 @@ serve(async (req) => {
         max_tokens: 4096,
         system: fullSystemPrompt,
         messages: anthropicMessages,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
         stream: true,
       }),
     });
@@ -231,6 +232,8 @@ serve(async (req) => {
     let fullAssistantResponse = "";
     const isSaveCommand = command.type === "save";
 
+    let isSearching = false;
+
     const transformStream = new TransformStream({
       transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
@@ -244,6 +247,17 @@ serve(async (req) => {
           try {
             const event = JSON.parse(jsonStr);
 
+            // Detect web search start
+            if (event.type === "content_block_start" && event.content_block?.type === "web_search_tool_use") {
+              if (!isSearching) {
+                isSearching = true;
+                const searchChunk = {
+                  choices: [{ delta: { content: "🔍 Searching the web...\n\n" } }],
+                };
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(searchChunk)}\n\n`));
+              }
+            }
+
             if (event.type === "content_block_delta" && event.delta?.text) {
               if (isSaveCommand) fullAssistantResponse += event.delta.text;
               const openAiChunk = {
@@ -252,7 +266,6 @@ serve(async (req) => {
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(openAiChunk)}\n\n`));
             } else if (event.type === "message_stop") {
               controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
-              // After stream ends, save session if needed
               if (isSaveCommand && fullAssistantResponse) {
                 handleSaveSession(fullAssistantResponse);
               }
