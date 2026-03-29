@@ -31,6 +31,42 @@ function getGreeting() {
   return "Good evening";
 }
 
+function parseLovableBrief(content: string): { text: string; brief: { prompt: string; suggested_project?: string } | null } {
+  const match = content.match(/```lovable-brief\s*\n([\s\S]*?)```/);
+  if (!match) return { text: content, brief: null };
+  try {
+    const brief = JSON.parse(match[1]);
+    const text = content.replace(/```lovable-brief\s*\n[\s\S]*?```/, "").trim();
+    return { text, brief };
+  } catch {
+    return { text: content, brief: null };
+  }
+}
+
+function RenderAssistantMessage({ content }: { content: string }) {
+  const { text, brief } = parseLovableBrief(content);
+  const [dismissed, setDismissed] = useState(false);
+
+  return (
+    <>
+      {text && (
+        <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:font-heading">
+          <ReactMarkdown>{text}</ReactMarkdown>
+        </div>
+      )}
+      {brief && !dismissed && (
+        <div className="mt-3">
+          <LovableBriefCard
+            prompt={brief.prompt}
+            suggestedProject={brief.suggested_project}
+            onDismiss={() => setDismissed(true)}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function JarvisChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
