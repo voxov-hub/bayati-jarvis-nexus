@@ -1,90 +1,23 @@
 import { useState, useRef } from "react";
-import { ImageIcon, Loader2, Check, AlertCircle, Sparkles } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { ImageIcon, Sparkles } from "lucide-react";
+import { PipelineTimeline } from "@/components/image-studio/PipelineTimeline";
+import { Gallery, useGenerationCount } from "@/components/image-studio/Gallery";
+import type { PipelineState, PipelineStep } from "@/components/image-studio/types";
 
 const PIPELINE_URL = "https://pipeline.voxovdesign.com";
 
-type PipelineStep = "idle" | "crafting" | "generating" | "reviewing" | "complete" | "error";
-
-interface BrandReview {
-  brand_score?: number;
-  purpose_score?: number;
-  feel_score?: number;
-  notes?: string;
-}
-
-interface GenerationResult {
-  step: PipelineStep;
-  imageUrl?: string;
-  filename?: string;
-  review?: BrandReview;
-  error?: string;
-}
-
-const stepLabels: Record<PipelineStep, string> = {
-  idle: "Ready",
-  crafting: "Crafting Prompt",
-  generating: "Generating Image",
-  reviewing: "Brand Review",
-  complete: "Complete",
-  error: "Error",
-};
-
-function StepCard({ step, currentStep, children }: { step: PipelineStep; currentStep: PipelineStep; children: React.ReactNode }) {
-  const steps: PipelineStep[] = ["crafting", "generating", "reviewing", "complete"];
-  const ci = steps.indexOf(currentStep);
-  const si = steps.indexOf(step);
-  const isActive = step === currentStep;
-  const isDone = ci > si;
-  const isPending = ci < si;
-
-  return (
-    <div
-      className={`rounded-xl border p-4 transition-all ${
-        isActive
-          ? "border-primary bg-card shadow-sm"
-          : isDone
-          ? "border-border bg-card/50"
-          : "border-border/50 bg-muted/30 opacity-50"
-      }`}
-    >
-      <div className="flex items-center gap-2 mb-2">
-        {isDone ? (
-          <Check className="w-4 h-4 text-primary" />
-        ) : isActive ? (
-          <Loader2 className="w-4 h-4 text-primary animate-spin" />
-        ) : (
-          <div className="w-4 h-4 rounded-full border border-muted-foreground/30" />
-        )}
-        <span className="text-xs font-medium font-heading text-muted-foreground uppercase tracking-wider">
-          {stepLabels[step]}
-        </span>
-      </div>
-      {(isActive || isDone) && children}
-    </div>
-  );
-}
-
-function ScoreBadge({ label, score }: { label: string; score?: number }) {
-  if (score === undefined) return null;
-  const color = score >= 8 ? "bg-primary/15 text-primary" : score >= 5 ? "bg-secondary text-secondary-foreground" : "bg-destructive/15 text-destructive";
-  return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
-      {label}: {score}/10
-    </span>
-  );
-}
-
 export default function ImageStudio() {
-  const [prompt, setPrompt] = useState("");
-  const [result, setResult] = useState<GenerationResult>({ step: "idle" });
+  const [brief, setBrief] = useState("");
+  const [imageType, setImageType] = useState("product");
+  const [state, setState] = useState<PipelineState>({ step: "idle" });
   const [isGenerating, setIsGenerating] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const generationCount = useGenerationCount();
 
   const generate = async () => {
-    if (!prompt.trim() || isGenerating) return;
+    if (!brief.trim() || isGenerating) return;
     setIsGenerating(true);
-    setResult({ step: "crafting" });
+    setState({ step: "prompt" });
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -93,7 +26,7 @@ export default function ImageStudio() {
       const response = await fetch(`${PIPELINE_URL}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim() }),
+        body: JSON.stringify({ brief: brief.trim(), image_type: imageType }),
         signal: controller.signal,
       });
 
@@ -108,125 +41,111 @@ export default function ImageStudio() {
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
 
-        let newlineIndex: number;
-        while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-          const line = buffer.slice(0, newlineIndex).trim();
-          buffer = buffer.slice(newlineIndex + 1);
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
 
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") break;
-
-          try {
-            const event = JSON.parse(jsonStr);
-            if (event.step) {
-              setResult((prev) => ({
-                ...prev,
-                step: event.step as PipelineStep,
-                ...(event.image_url && { imageUrl: event.image_url }),
-                ...(event.filename && { filename: event.filename }),
-                ...(event.review && { review: event.review }),
-              }));
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const event = JSON.parse(line.slice(6));
+              handlePipelineEvent(event);
+            } catch {
+              // skip partial JSON
             }
-          } catch {
-            // skip partial JSON
           }
         }
       }
-    } catch (err: any) {
-      if (err.name !== "AbortError") {
-        setResult({ step: "error", error: err.message || "Unknown error" });
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error("Unknown error");
+      if (error.name !== "AbortError") {
+        setState((prev) => ({ ...prev, step: "error", error: error.message }));
       }
     } finally {
       setIsGenerating(false);
     }
   };
 
+  const handlePipelineEvent = (event: Record<string, unknown>) => {
+    const step = event.step as PipelineStep | undefined;
+    if (!step) return;
+
+    setState((prev) => ({
+      ...prev,
+      step,
+      ...(typeof event.prompt === "string" && { craftedPrompt: event.prompt }),
+      ...(typeof event.image_url === "string" && { imageUrl: event.image_url }),
+      ...(typeof event.filename === "string" && { filename: event.filename }),
+      ...(event.review && typeof event.review === "object" && { review: event.review as PipelineState["review"] }),
+    }));
+  };
+
   return (
     <div className="flex flex-col h-full bg-background">
-      <header className="px-4 md:px-8 py-4 md:py-6 border-b border-border">
-        <h1 className="font-heading text-xl font-semibold flex items-center gap-2">
-          <ImageIcon className="w-5 h-5 text-primary" />
-          Image Studio
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Generate product images via the Voxov Design pipeline
-        </p>
+      {/* Header */}
+      <header className="px-4 md:px-8 py-4 md:py-5 border-b border-border flex items-center justify-between">
+        <div>
+          <h1 className="font-heading text-lg font-semibold flex items-center gap-2">
+            <ImageIcon className="w-5 h-5 text-primary" />
+            Image Studio
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Voxov Design pipeline
+          </p>
+        </div>
+        {generationCount !== null && (
+          <span className="text-xs text-muted-foreground font-medium tabular-nums">
+            {generationCount} generation{generationCount !== 1 ? "s" : ""} this month
+          </span>
+        )}
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6">
-        {/* Prompt input */}
-        <div className="max-w-2xl">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-10">
+        {/* Input */}
+        <div className="max-w-xl space-y-3">
           <div className="flex gap-2">
             <input
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              value={brief}
+              onChange={(e) => setBrief(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && generate()}
-              placeholder="Describe the product image you want to create..."
-              className="flex-1 bg-card border border-border rounded-xl px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-primary"
+              placeholder="Describe the product image you want…"
+              className="flex-1 bg-card border border-border rounded-xl px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-primary font-body"
             />
             <button
               onClick={generate}
-              disabled={!prompt.trim() || isGenerating}
-              className="shrink-0 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-40 flex items-center gap-2"
+              disabled={!brief.trim() || isGenerating}
+              className="shrink-0 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium font-heading disabled:opacity-40 flex items-center gap-2 hover:bg-primary/90 transition-colors"
             >
               <Sparkles className="w-4 h-4" />
               Generate
             </button>
           </div>
+          <div className="flex gap-1.5">
+            {["product", "lifestyle", "social", "hero"].map((t) => (
+              <button
+                key={t}
+                onClick={() => setImageType(t)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  imageType === t
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Pipeline steps */}
-        {result.step !== "idle" && (
-          <div className="max-w-2xl grid gap-3">
-            <StepCard step="crafting" currentStep={result.step}>
-              <p className="text-sm text-muted-foreground">Enhancing your prompt with brand context...</p>
-            </StepCard>
+        {/* Pipeline */}
+        <PipelineTimeline state={state} />
 
-            <StepCard step="generating" currentStep={result.step}>
-              <p className="text-sm text-muted-foreground">Creating image with AI...</p>
-            </StepCard>
-
-            <StepCard step="reviewing" currentStep={result.step}>
-              {result.review ? (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    <ScoreBadge label="Brand" score={result.review.brand_score} />
-                    <ScoreBadge label="Purpose" score={result.review.purpose_score} />
-                    <ScoreBadge label="Feel" score={result.review.feel_score} />
-                  </div>
-                  {result.review.notes && (
-                    <p className="text-xs text-muted-foreground">{result.review.notes}</p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Claude is reviewing brand alignment...</p>
-              )}
-            </StepCard>
-
-            <StepCard step="complete" currentStep={result.step}>
-              {result.imageUrl && (
-                <div className="space-y-3">
-                  <img
-                    src={result.imageUrl.startsWith("http") ? result.imageUrl : `${PIPELINE_URL}/images/${result.imageUrl}`}
-                    alt="Generated product"
-                    className="rounded-lg w-full max-w-md border border-border"
-                  />
-                  {result.filename && (
-                    <p className="text-xs text-muted-foreground">Saved as: {result.filename}</p>
-                  )}
-                </div>
-              )}
-            </StepCard>
-
-            {result.step === "error" && (
-              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 flex items-start gap-3">
-                <AlertCircle className="w-4 h-4 text-destructive mt-0.5" />
-                <p className="text-sm text-destructive">{result.error}</p>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Gallery */}
+        <section>
+          <h2 className="font-heading text-sm font-semibold text-foreground/70 uppercase tracking-wider mb-4">
+            Gallery
+          </h2>
+          <Gallery />
+        </section>
       </div>
     </div>
   );
