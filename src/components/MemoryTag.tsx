@@ -88,7 +88,7 @@ export function MemoryTag({ tag, messageTopic }: MemoryTagProps) {
       </button>
 
       {editing && (
-        <div className="absolute bottom-full left-0 mb-1 w-48 bg-card border border-border rounded-lg shadow-lg z-50 py-1 max-h-48 overflow-y-auto">
+        <div className="absolute bottom-full left-0 mb-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50 py-1 max-h-48 overflow-y-auto">
           {loading ? (
             <p className="text-xs text-muted-foreground px-3 py-2">Loading…</p>
           ) : projects.length === 0 ? (
@@ -103,7 +103,7 @@ export function MemoryTag({ tag, messageTopic }: MemoryTagProps) {
                 }`}
               >
                 <FolderOpen className="w-3 h-3 shrink-0" />
-                {p}
+                {toDisplayName(p)}
                 {p === tag && <Check className="w-3 h-3 ml-auto text-primary" />}
               </button>
             ))
