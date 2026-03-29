@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getProjects } from "@/lib/lovable-projects";
 import LovableBriefCard from "@/components/LovableBriefCard";
+import { MemoryTag } from "@/components/MemoryTag";
 
 interface Message {
   id: string;
@@ -31,6 +32,12 @@ function getGreeting() {
   return "Good evening";
 }
 
+function parseMemoryTag(content: string): { text: string; memoryTag: string | null } {
+  const match = content.match(/<!--memory_tag:(.+?)-->/);
+  const cleaned = content.replace(/<!--memory_tag:.+?-->/g, "").trim();
+  return { text: cleaned, memoryTag: match ? match[1] : null };
+}
+
 function parseLovableBrief(content: string): { text: string; brief: { prompt: string; suggested_project?: string } | null } {
   const match = content.match(/```lovable-brief\s*\n([\s\S]*?)```/);
   if (!match) return { text: content, brief: null };
@@ -44,8 +51,12 @@ function parseLovableBrief(content: string): { text: string; brief: { prompt: st
 }
 
 function RenderAssistantMessage({ content }: { content: string }) {
-  const { text, brief } = parseLovableBrief(content);
+  const { text: rawText, memoryTag } = parseMemoryTag(content);
+  const { text, brief } = parseLovableBrief(rawText);
   const [dismissed, setDismissed] = useState(false);
+
+  // Extract a short topic from the first ~80 chars of the response
+  const messageTopic = text.slice(0, 80);
 
   return (
     <>
@@ -62,6 +73,9 @@ function RenderAssistantMessage({ content }: { content: string }) {
             onDismiss={() => setDismissed(true)}
           />
         </div>
+      )}
+      {memoryTag && (
+        <MemoryTag tag={memoryTag} messageTopic={messageTopic} />
       )}
     </>
   );
