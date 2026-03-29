@@ -1,9 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Mic, Square, History, Plus, ChevronLeft } from "lucide-react";
+import { Send, Mic, Square, History, Plus, ChevronLeft, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Message {
   id: string;
@@ -18,7 +25,15 @@ interface Conversation {
   created_at: string;
 }
 
+interface MemoryProject {
+  project: string;
+  last_updated: string;
+  current_status: string;
+  filename: string;
+}
+
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/jarvis-chat`;
+const MEMORY_BASE = "https://pipeline.voxovdesign.com/jarvis/memory";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -35,6 +50,8 @@ export default function JarvisChat() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [activeProject, setActiveProject] = useState("bayatico-strategy");
+  const [memoryProjects, setMemoryProjects] = useState<MemoryProject[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -49,9 +66,10 @@ export default function JarvisChat() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Load conversation list
+  // Load conversation list and memory projects
   useEffect(() => {
     loadConversations();
+    loadMemoryProjects();
   }, []);
 
   // Show welcome message when no conversation
@@ -67,6 +85,18 @@ export default function JarvisChat() {
       ]);
     }
   }, [conversationId]);
+
+  async function loadMemoryProjects() {
+    try {
+      const resp = await fetch(MEMORY_BASE);
+      if (resp.ok) {
+        const data = await resp.json();
+        setMemoryProjects(data.projects || []);
+      }
+    } catch {
+      // Memory server might not be set up yet
+    }
+  }
 
   async function loadConversations() {
     const { data } = await supabase
@@ -130,14 +160,12 @@ export default function JarvisChat() {
       timestamp: new Date(),
     };
 
-    // Filter out welcome message for API
     const realMessages = messages.filter((m) => m.id !== "welcome");
     setMessages((prev) => [...prev.filter((m) => m.id !== "welcome"), userMsg]);
     setInput("");
     setIsLoading(true);
 
     try {
-      // Create or reuse conversation
       let convId = conversationId;
       if (!convId) {
         const title = text.slice(0, 80);
@@ -152,23 +180,20 @@ export default function JarvisChat() {
         loadConversations();
       }
 
-      // Save user message
       await saveMessage(convId, "user", text);
 
-      // Build messages for API
       const apiMessages = [
         ...realMessages.map((m) => ({ role: m.role, content: m.content })),
         { role: "user" as const, content: text },
       ];
 
-      // Stream response
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: apiMessages }),
+        body: JSON.stringify({ messages: apiMessages, activeProject }),
       });
 
       if (!resp.ok) {
@@ -230,7 +255,6 @@ export default function JarvisChat() {
         }
       }
 
-      // Finalize streaming message
       if (assistantSoFar) {
         setMessages((prev) =>
           prev.map((m) =>
@@ -238,11 +262,16 @@ export default function JarvisChat() {
           )
         );
         await saveMessage(convId, "assistant", assistantSoFar);
-        // Update conversation title if it was auto-generated
         await supabase
           .from("conversations")
           .update({ updated_at: new Date().toISOString() })
           .eq("id", convId);
+
+        // Refresh memory projects if a new project was created
+        const lower = text.toLowerCase();
+        if (lower.startsWith("start project") || lower.startsWith("new project")) {
+          loadMemoryProjects();
+        }
       }
     } catch (err: any) {
       console.error("Jarvis error:", err);
@@ -291,6 +320,10 @@ export default function JarvisChat() {
       sendMessage();
     }
   };
+
+  // Format project slug to display name
+  const formatProjectName = (slug: string) =>
+    slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   // History sidebar for mobile
   if (showHistory) {
@@ -416,38 +449,61 @@ export default function JarvisChat() {
         )}
       </div>
 
-      {/* Input bar */}
+      {/* Input bar with project switcher */}
       <div className="border-t border-border px-4 py-3 md:px-8 md:py-4 bg-background">
-        <div className="flex items-end gap-2 max-w-3xl mx-auto">
-          <div className="flex-1 bg-card border border-border rounded-xl px-4 py-2.5 flex items-end gap-2">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Talk to Jarvis..."
-              rows={1}
-              className="flex-1 bg-transparent text-sm resize-none outline-none placeholder:text-muted-foreground max-h-32"
-              style={{ minHeight: "24px" }}
-            />
+        <div className="max-w-3xl mx-auto space-y-2">
+          {/* Project switcher */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground shrink-0">Project:</span>
+            <Select value={activeProject} onValueChange={setActiveProject}>
+              <SelectTrigger className="h-7 text-xs border-border bg-card w-auto min-w-[140px] max-w-[220px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bayatico-strategy">BayatiCo Strategy</SelectItem>
+                {memoryProjects
+                  .filter((p) => p.project !== "bayatico-strategy" && p.project !== "fredrik-profile")
+                  .map((p) => (
+                    <SelectItem key={p.project} value={p.project}>
+                      {formatProjectName(p.project)}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Input field */}
+          <div className="flex items-end gap-2">
+            <div className="flex-1 bg-card border border-border rounded-xl px-4 py-2.5 flex items-end gap-2">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Talk to Jarvis..."
+                rows={1}
+                className="flex-1 bg-transparent text-sm resize-none outline-none placeholder:text-muted-foreground max-h-32"
+                style={{ minHeight: "24px" }}
+              />
+              <button
+                onClick={toggleRecording}
+                className={`shrink-0 p-1.5 rounded-lg transition-colors ${
+                  isRecording
+                    ? "bg-destructive text-destructive-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+            </div>
             <button
-              onClick={toggleRecording}
-              className={`shrink-0 p-1.5 rounded-lg transition-colors ${
-                isRecording
-                  ? "bg-destructive text-destructive-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              onClick={sendMessage}
+              disabled={!input.trim() || isLoading}
+              className="shrink-0 w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 transition-opacity"
             >
-              {isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              <Send className="w-4 h-4" />
             </button>
           </div>
-          <button
-            onClick={sendMessage}
-            disabled={!input.trim() || isLoading}
-            className="shrink-0 w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 transition-opacity"
-          >
-            <Send className="w-4 h-4" />
-          </button>
         </div>
       </div>
     </div>
