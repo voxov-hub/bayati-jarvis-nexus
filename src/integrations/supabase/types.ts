@@ -38,6 +38,30 @@ export type Database = {
         }
         Relationships: []
       }
+      memory_corrections: {
+        Row: {
+          corrected_tag: string
+          created_at: string
+          id: string
+          message_topic: string
+          predicted_tag: string
+        }
+        Insert: {
+          corrected_tag: string
+          created_at?: string
+          id?: string
+          message_topic: string
+          predicted_tag: string
+        }
+        Update: {
+          corrected_tag?: string
+          created_at?: string
+          id?: string
+          message_topic?: string
+          predicted_tag?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string
