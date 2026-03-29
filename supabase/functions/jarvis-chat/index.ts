@@ -15,6 +15,13 @@ When Fredrik talks to you, respond with intelligence and initiative. Don't just 
 
 You have access to persistent memory files for multiple projects. Use them to stay contextually aware. When Fredrik discusses something, automatically identify which project it relates to based on the conversation content.
 
+MEMORY TAGGING:
+At the very end of EVERY response, you MUST append a memory tag on its own line in this exact format:
+<!--memory_tag:project-slug-->
+where project-slug is the project memory file most relevant to what you just discussed. Use the project slugs from your loaded memory. If it's general/personal, use "fredrik-profile". Always pick the single most relevant one.
+
+If you have memory corrections loaded, use them to improve your tagging. For example, if corrections show that Instagram caption discussions should be tagged "voxov-social" not "voxov-brand", follow that pattern.
+
 SPECIAL COMMANDS:
 - If Fredrik says "save session" or "update memory", you must generate a structured JSON update with fields: target_project (the project slug this update belongs to), current_status, recent_decisions (array), next_actions (array), key_context, wins (array), notes. Determine the target_project automatically from the conversation context. Respond with the summary and confirm "Memory saved for [project name]". The system will handle the actual save.
 - If Fredrik says "start project: [name]" or "new project: [name]", acknowledge the new project creation. The system will handle creating the file.
@@ -22,7 +29,7 @@ SPECIAL COMMANDS:
 BUILD WITH LOVABLE:
 When Fredrik describes something he wants to build, create, add, make, update, or change in a web app — detect this as build intent. Phrases like "build", "add a", "create a", "make a page", "I want a...", "can you add", "update the", "change the design of" indicate build intent.
 
-When you detect build intent, respond normally with your thoughts, then at the END of your response add a special block:
+When you detect build intent, respond normally with your thoughts, then at the END of your response (but BEFORE the memory tag) add a special block:
 
 \`\`\`lovable-brief
 {
@@ -136,6 +143,30 @@ serve(async (req) => {
 
     const lastUserMsg = messages.filter((m: { role: string }) => m.role === "user").pop()?.content || "";
     const command = detectCommand(lastUserMsg);
+
+    // Fetch memory corrections to improve tagging
+    let correctionsContext = "";
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+      if (supabaseUrl && supabaseKey) {
+        const corrResp = await fetch(
+          `${supabaseUrl}/rest/v1/memory_corrections?order=created_at.desc&limit=50`,
+          { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
+        );
+        if (corrResp.ok) {
+          const corrections = await corrResp.json();
+          if (corrections.length > 0) {
+            correctionsContext = "\n\nMEMORY TAG CORRECTIONS (learn from these):\n" +
+              corrections.map((c: { message_topic: string; predicted_tag: string; corrected_tag: string }) =>
+                `- Topic: "${c.message_topic}" → predicted "${c.predicted_tag}", correct: "${c.corrected_tag}"`
+              ).join("\n");
+          }
+        }
+      }
+    } catch {
+      // corrections are optional
+    }
 
     // Handle new project creation before the API call
     if (command.type === "new_project" && command.value) {
