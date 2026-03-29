@@ -17,7 +17,23 @@ You have access to persistent memory files for multiple projects. Use them to st
 
 SPECIAL COMMANDS:
 - If Fredrik says "save session" or "update memory", you must generate a structured JSON update with fields: target_project (the project slug this update belongs to), current_status, recent_decisions (array), next_actions (array), key_context, wins (array), notes. Determine the target_project automatically from the conversation context. Respond with the summary and confirm "Memory saved for [project name]". The system will handle the actual save.
-- If Fredrik says "start project: [name]" or "new project: [name]", acknowledge the new project creation. The system will handle creating the file.`;
+- If Fredrik says "start project: [name]" or "new project: [name]", acknowledge the new project creation. The system will handle creating the file.
+
+BUILD WITH LOVABLE:
+When Fredrik describes something he wants to build, create, add, make, update, or change in a web app — detect this as build intent. Phrases like "build", "add a", "create a", "make a page", "I want a...", "can you add", "update the", "change the design of" indicate build intent.
+
+When you detect build intent, respond normally with your thoughts, then at the END of your response add a special block:
+
+\`\`\`lovable-brief
+{
+  "prompt": "The detailed Lovable prompt you generated — be specific about components, placement, behavior, content. Include brand context (colors, typography, tone) from memory. Never be vague.",
+  "suggested_project": "the project id/slug that best matches (e.g. 'voxov-storefront' or 'bayati-os')"
+}
+\`\`\`
+
+The prompt should follow Lovable best practices: clear, concise, actionable instructions. Include relevant brand context from memory files. Be specific about component placement, behavior, and content. Never be vague.
+
+Available Lovable projects (sent from frontend): Check the lovable_projects field in the request for the current registry.`;
 
 async function fetchMemory(): Promise<string> {
   try {
