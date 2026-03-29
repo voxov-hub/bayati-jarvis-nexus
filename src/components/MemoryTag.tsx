@@ -1,10 +1,25 @@
 import { useState, useEffect, useRef } from "react";
-import { Pencil, Check, X, FolderOpen } from "lucide-react";
+import { Pencil, Check, FolderOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const MEMORY_BASE = "https://pipeline.voxovdesign.com/jarvis/memory";
 
-interface MemoryTagProps {
+const DISPLAY_NAMES: Record<string, string> = {
+  "fredrik-profile": "Fredrik — Profile",
+  "voxov-brand": "Voxov — Brand Identity",
+  "voxov-design": "Voxov — Storefront",
+  "voxov-social": "Voxov — Social",
+};
+
+function toDisplayName(slug: string): string {
+  if (DISPLAY_NAMES[slug]) return DISPLAY_NAMES[slug];
+  // Derive: split on first hyphen as "group - detail", capitalise words
+  const parts = slug.split("-");
+  const group = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+  if (parts.length === 1) return group;
+  const detail = parts.slice(1).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return `${group} — ${detail}`;
+}
   tag: string;
   messageTopic: string;
 }
