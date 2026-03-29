@@ -1,4 +1,5 @@
 import { Heart, Flag, Bell, Users } from "lucide-react";
+import { MealPlan } from "@/components/MealPlan";
 
 const areas = [
   { icon: Flag, label: "Personal Goals", desc: "Financial independence, health, growth" },
@@ -16,7 +17,7 @@ export default function Life() {
         </h1>
         <p className="text-sm text-muted-foreground mt-1">Personal goals, family, and priorities</p>
       </header>
-      <div className="flex-1 px-4 md:px-8 py-6">
+      <div className="flex-1 px-4 md:px-8 py-6 space-y-8">
         <div className="grid gap-3 max-w-lg">
           {areas.map((a) => (
             <div key={a.label} className="bg-card border border-border rounded-xl p-4 flex items-start gap-4 hover:border-primary/30 transition-colors cursor-pointer">
@@ -30,6 +31,11 @@ export default function Life() {
             </div>
           ))}
         </div>
+
+        {/* Veckans Matsedel */}
+        <section>
+          <MealPlan />
+        </section>
       </div>
     </div>
   );
