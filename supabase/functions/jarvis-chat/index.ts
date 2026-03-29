@@ -5,11 +5,105 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const MEMORY_BASE = "https://pipeline.voxovdesign.com/jarvis/memory";
+
 const SYSTEM_PROMPT = `You are Jarvis, the personal AI assistant and business partner of Fredrik Bayati. Fredrik runs BayatiCo AB, a holding company based in Gothenburg, Sweden. His first brand is Voxov Design — a premium Scandinavian lighting brand with the philosophy 'form follows feeling'. He also works in a corporate marketing role while building his own businesses toward financial independence for his family.
 
 You are not a generic assistant. You are Fredrik's partner. You know his context, you remember what matters, and you push things forward. Be direct, warm, and capable. Think like a co-founder who also happens to be able to build, write, design, and strategize.
 
-When Fredrik talks to you, respond with intelligence and initiative. Don't just answer — add value, suggest next steps, flag risks, celebrate wins.`;
+When Fredrik talks to you, respond with intelligence and initiative. Don't just answer — add value, suggest next steps, flag risks, celebrate wins.
+
+SPECIAL COMMANDS:
+- If Fredrik says "save session" or "update memory", you must generate a structured JSON update with fields: current_status, recent_decisions (array), next_actions (array), key_context, wins (array), notes. Respond with the summary and confirm "Memory saved for [project name]". The system will handle the actual save.
+- If Fredrik says "start project: [name]" or "new project: [name]", acknowledge the new project creation. The system will handle creating the file.`;
+
+async function fetchMemory(activeProject?: string): Promise<string> {
+  try {
+    // Always fetch the profile
+    const profilePromise = fetch(`${MEMORY_BASE}/fredrik-profile`).then(r => r.ok ? r.json() : null).catch(() => null);
+    
+    // Fetch index
+    const indexResp = await fetch(MEMORY_BASE);
+    if (!indexResp.ok) return "";
+    const index = await indexResp.json();
+    
+    // Fetch all project files in parallel
+    const projectPromises = (index.projects || []).map((p: { filename: string; project: string }) =>
+      fetch(`${MEMORY_BASE}/${p.project}`).then(r => r.ok ? r.json() : null).catch(() => null)
+    );
+    
+    const [profile, ...projects] = await Promise.all([profilePromise, ...projectPromises]);
+    
+    let memoryBlock = "--- JARVIS PERSISTENT MEMORY ---\n";
+    
+    if (profile) {
+      memoryBlock += `[PROFILE: Fredrik Bayati]\n${JSON.stringify(profile, null, 2)}\n\n`;
+    }
+    
+    for (const proj of projects) {
+      if (!proj) continue;
+      const label = proj.project || "Unknown";
+      const isActive = activeProject && label === activeProject;
+      memoryBlock += `[PROJECT: ${label}]${isActive ? " (ACTIVE)" : ""}\n${JSON.stringify(proj, null, 2)}\n\n`;
+    }
+    
+    memoryBlock += "--- END MEMORY ---";
+    return memoryBlock;
+  } catch (e) {
+    console.error("Failed to fetch memory:", e);
+    return "";
+  }
+}
+
+async function handleSaveSession(activeProject: string, assistantResponse: string): Promise<void> {
+  try {
+    // Try to extract JSON from the assistant's response
+    const jsonMatch = assistantResponse.match(/\{[\s\S]*?"current_status"[\s\S]*?\}/);
+    if (!jsonMatch) return;
+    
+    const data = JSON.parse(jsonMatch[0]);
+    await fetch(`${MEMORY_BASE}/${activeProject}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  } catch (e) {
+    console.error("Failed to save session memory:", e);
+  }
+}
+
+async function handleNewProject(projectSlug: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`${MEMORY_BASE}/${projectSlug}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project: projectSlug,
+        current_status: "",
+        key_context: "",
+        recent_decisions: [],
+        next_actions: [],
+        wins: [],
+        notes: "",
+      }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+function detectCommand(lastUserMessage: string): { type: "save" | "new_project" | null; value?: string } {
+  const lower = lastUserMessage.toLowerCase().trim();
+  if (lower === "save session" || lower === "update memory" || lower.startsWith("save session") || lower.startsWith("update memory")) {
+    return { type: "save" };
+  }
+  const newProjMatch = lower.match(/(?:start project|new project)[:\s]+(.+)/);
+  if (newProjMatch) {
+    return { type: "new_project", value: newProjMatch[1].trim().replace(/\s+/g, "-").toLowerCase() };
+  }
+  return { type: null };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -17,12 +111,27 @@ serve(async (req) => {
   }
 
   try {
-    const { messages } = await req.json();
+    const { messages, activeProject } = await req.json();
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
 
-    // Convert from OpenAI message format to Anthropic format
-    // Anthropic expects system prompt separately, not in messages array
+    const lastUserMsg = messages.filter((m: { role: string }) => m.role === "user").pop()?.content || "";
+    const command = detectCommand(lastUserMsg);
+
+    // Handle new project creation before the API call
+    if (command.type === "new_project" && command.value) {
+      await handleNewProject(command.value);
+    }
+
+    // Fetch persistent memory
+    const currentProject = activeProject || "bayatico-strategy";
+    const memoryContext = await fetchMemory(currentProject);
+
+    // Build full system prompt with memory
+    const fullSystemPrompt = memoryContext
+      ? `${memoryContext}\n\n${SYSTEM_PROMPT}\n\nActive project: ${currentProject}`
+      : `${SYSTEM_PROMPT}\n\nActive project: ${currentProject}`;
+
     const anthropicMessages = messages
       .filter((m: { role: string }) => m.role !== "system")
       .map((m: { role: string; content: string }) => ({
@@ -40,7 +149,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 4096,
-        system: SYSTEM_PROMPT,
+        system: fullSystemPrompt,
         messages: anthropicMessages,
         stream: true,
       }),
@@ -61,8 +170,10 @@ serve(async (req) => {
       });
     }
 
-    // Transform Anthropic SSE stream to OpenAI-compatible SSE format
-    // so the frontend doesn't need to change
+    // Track full response for save-session command
+    let fullAssistantResponse = "";
+    const isSaveCommand = command.type === "save";
+
     const transformStream = new TransformStream({
       transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
@@ -77,13 +188,17 @@ serve(async (req) => {
             const event = JSON.parse(jsonStr);
 
             if (event.type === "content_block_delta" && event.delta?.text) {
-              // Convert to OpenAI delta format
+              if (isSaveCommand) fullAssistantResponse += event.delta.text;
               const openAiChunk = {
                 choices: [{ delta: { content: event.delta.text } }],
               };
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(openAiChunk)}\n\n`));
             } else if (event.type === "message_stop") {
               controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+              // After stream ends, save session if needed
+              if (isSaveCommand && fullAssistantResponse) {
+                handleSaveSession(currentProject, fullAssistantResponse);
+              }
             }
           } catch {
             // skip unparseable lines
