@@ -20,6 +20,7 @@ function toDisplayName(slug: string): string {
   const detail = parts.slice(1).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   return `${group} — ${detail}`;
 }
+interface MemoryTagProps {
   tag: string;
   messageTopic: string;
 }
