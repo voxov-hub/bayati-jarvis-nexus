@@ -181,6 +181,10 @@ serve(async (req) => {
       ? `${memoryContext}\n\n${SYSTEM_PROMPT}`
       : SYSTEM_PROMPT;
 
+    if (correctionsContext) {
+      fullSystemPrompt += correctionsContext;
+    }
+
     if (lovable_projects && Array.isArray(lovable_projects) && lovable_projects.length > 0) {
       fullSystemPrompt += `\n\nRegistered Lovable projects:\n${lovable_projects.map((p: { id: string; name: string; description: string }) => `- ${p.name} (id: ${p.id}): ${p.description}`).join("\n")}`;
     }

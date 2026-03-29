@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getProjects } from "@/lib/lovable-projects";
 import LovableBriefCard from "@/components/LovableBriefCard";
+import { MemoryTag } from "@/components/MemoryTag";
 
 interface Message {
   id: string;
@@ -29,6 +30,12 @@ function getGreeting() {
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
+}
+
+function parseMemoryTag(content: string): { text: string; memoryTag: string | null } {
+  const match = content.match(/<!--memory_tag:(.+?)-->/);
+  const cleaned = content.replace(/<!--memory_tag:.+?-->/g, "").trim();
+  return { text: cleaned, memoryTag: match ? match[1] : null };
 }
 
 function parseLovableBrief(content: string): { text: string; brief: { prompt: string; suggested_project?: string } | null } {
