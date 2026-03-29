@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { getProjects } from "@/lib/lovable-projects";
+import LovableBriefCard from "@/components/LovableBriefCard";
 
 interface Message {
   id: string;
@@ -165,7 +167,7 @@ export default function JarvisChat() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: apiMessages }),
+        body: JSON.stringify({ messages: apiMessages, lovable_projects: getProjects() }),
       });
 
       if (!resp.ok) {
@@ -386,9 +388,7 @@ export default function JarvisChat() {
                   }`}
                 >
                   {msg.role === "assistant" ? (
-                    <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:font-heading">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
-                    </div>
+                    <RenderAssistantMessage content={msg.content} />
                   ) : (
                     msg.content
                   )}
