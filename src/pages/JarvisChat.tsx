@@ -51,8 +51,12 @@ function parseLovableBrief(content: string): { text: string; brief: { prompt: st
 }
 
 function RenderAssistantMessage({ content }: { content: string }) {
-  const { text, brief } = parseLovableBrief(content);
+  const { text: rawText, memoryTag } = parseMemoryTag(content);
+  const { text, brief } = parseLovableBrief(rawText);
   const [dismissed, setDismissed] = useState(false);
+
+  // Extract a short topic from the first ~80 chars of the response
+  const messageTopic = text.slice(0, 80);
 
   return (
     <>
@@ -69,6 +73,9 @@ function RenderAssistantMessage({ content }: { content: string }) {
             onDismiss={() => setDismissed(true)}
           />
         </div>
+      )}
+      {memoryTag && (
+        <MemoryTag tag={memoryTag} messageTopic={messageTopic} />
       )}
     </>
   );
