@@ -130,7 +130,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages } = await req.json();
+    const { messages, lovable_projects } = await req.json();
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
 
@@ -145,10 +145,14 @@ serve(async (req) => {
     // Fetch persistent memory
     const memoryContext = await fetchMemory();
 
-    // Build full system prompt with memory
-    const fullSystemPrompt = memoryContext
+    // Build full system prompt with memory + lovable projects registry
+    let fullSystemPrompt = memoryContext
       ? `${memoryContext}\n\n${SYSTEM_PROMPT}`
       : SYSTEM_PROMPT;
+
+    if (lovable_projects && Array.isArray(lovable_projects) && lovable_projects.length > 0) {
+      fullSystemPrompt += `\n\nRegistered Lovable projects:\n${lovable_projects.map((p: { id: string; name: string; description: string }) => `- ${p.name} (id: ${p.id}): ${p.description}`).join("\n")}`;
+    }
 
     const anthropicMessages = messages
       .filter((m: { role: string }) => m.role !== "system")
