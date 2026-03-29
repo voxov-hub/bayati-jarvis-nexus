@@ -13,11 +13,13 @@ You are not a generic assistant. You are Fredrik's partner. You know his context
 
 When Fredrik talks to you, respond with intelligence and initiative. Don't just answer — add value, suggest next steps, flag risks, celebrate wins.
 
+You have access to persistent memory files for multiple projects. Use them to stay contextually aware. When Fredrik discusses something, automatically identify which project it relates to based on the conversation content.
+
 SPECIAL COMMANDS:
-- If Fredrik says "save session" or "update memory", you must generate a structured JSON update with fields: current_status, recent_decisions (array), next_actions (array), key_context, wins (array), notes. Respond with the summary and confirm "Memory saved for [project name]". The system will handle the actual save.
+- If Fredrik says "save session" or "update memory", you must generate a structured JSON update with fields: target_project (the project slug this update belongs to), current_status, recent_decisions (array), next_actions (array), key_context, wins (array), notes. Determine the target_project automatically from the conversation context. Respond with the summary and confirm "Memory saved for [project name]". The system will handle the actual save.
 - If Fredrik says "start project: [name]" or "new project: [name]", acknowledge the new project creation. The system will handle creating the file.`;
 
-async function fetchMemory(activeProject?: string): Promise<string> {
+async function fetchMemory(): Promise<string> {
   try {
     // Always fetch the profile
     const profilePromise = fetch(`${MEMORY_BASE}/fredrik-profile`).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -43,8 +45,7 @@ async function fetchMemory(activeProject?: string): Promise<string> {
     for (const proj of projects) {
       if (!proj) continue;
       const label = proj.project || "Unknown";
-      const isActive = activeProject && label === activeProject;
-      memoryBlock += `[PROJECT: ${label}]${isActive ? " (ACTIVE)" : ""}\n${JSON.stringify(proj, null, 2)}\n\n`;
+      memoryBlock += `[PROJECT: ${label}]\n${JSON.stringify(proj, null, 2)}\n\n`;
     }
     
     memoryBlock += "--- END MEMORY ---";
@@ -55,14 +56,16 @@ async function fetchMemory(activeProject?: string): Promise<string> {
   }
 }
 
-async function handleSaveSession(activeProject: string, assistantResponse: string): Promise<void> {
+async function handleSaveSession(assistantResponse: string): Promise<void> {
   try {
-    // Try to extract JSON from the assistant's response
-    const jsonMatch = assistantResponse.match(/\{[\s\S]*?"current_status"[\s\S]*?\}/);
+    // Try to extract JSON from the assistant's response — look for target_project
+    const jsonMatch = assistantResponse.match(/\{[\s\S]*?"target_project"[\s\S]*?\}/);
     if (!jsonMatch) return;
     
     const data = JSON.parse(jsonMatch[0]);
-    await fetch(`${MEMORY_BASE}/${activeProject}`, {
+    const project = data.target_project || "bayatico-strategy";
+    delete data.target_project; // Don't store the routing field in the memory file
+    await fetch(`${MEMORY_BASE}/${project}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -111,7 +114,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, activeProject } = await req.json();
+    const { messages } = await req.json();
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
 
@@ -124,13 +127,12 @@ serve(async (req) => {
     }
 
     // Fetch persistent memory
-    const currentProject = activeProject || "bayatico-strategy";
-    const memoryContext = await fetchMemory(currentProject);
+    const memoryContext = await fetchMemory();
 
     // Build full system prompt with memory
     const fullSystemPrompt = memoryContext
-      ? `${memoryContext}\n\n${SYSTEM_PROMPT}\n\nActive project: ${currentProject}`
-      : `${SYSTEM_PROMPT}\n\nActive project: ${currentProject}`;
+      ? `${memoryContext}\n\n${SYSTEM_PROMPT}`
+      : SYSTEM_PROMPT;
 
     const anthropicMessages = messages
       .filter((m: { role: string }) => m.role !== "system")
@@ -197,7 +199,7 @@ serve(async (req) => {
               controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
               // After stream ends, save session if needed
               if (isSaveCommand && fullAssistantResponse) {
-                handleSaveSession(currentProject, fullAssistantResponse);
+                handleSaveSession(fullAssistantResponse);
               }
             }
           } catch {
