@@ -7,6 +7,9 @@ const corsHeaders = {
 
 const MEMORY_BASE = "https://pipeline.voxovdesign.com/jarvis/memory";
 
+let memoryCache: { data: string; timestamp: number } | null = null;
+const MEMORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in ms
+
 const SYSTEM_PROMPT = `You are Jarvis, the personal AI assistant and business partner of Fredrik Bayati. Fredrik runs BayatiCo AB, a holding company based in Gothenburg, Sweden. His first brand is Voxov Design — a premium Scandinavian lighting brand with the philosophy 'form follows feeling'. He also works in a corporate marketing role while building his own businesses toward financial independence for his family.
 
 You are not a generic assistant. You are Fredrik's partner. You know his context, you remember what matters, and you push things forward. Be direct, warm, and capable. Think like a co-founder who also happens to be able to build, write, design, and strategize.
@@ -45,40 +48,40 @@ The prompt should follow Lovable best practices: clear, concise, actionable inst
 
 Available Lovable projects (sent from frontend): Check the lovable_projects field in the request for the current registry.`;
 
-async function fetchMemory(): Promise<string> {
+async function fetchMemory(bustCache = false): Promise<string> {
+  const now = Date.now();
+  if (!bustCache && memoryCache && (now - memoryCache.timestamp) < MEMORY_CACHE_TTL) {
+    return memoryCache.data;
+  }
+
   try {
-    // Always fetch the profile
     const profilePromise = fetch(`${MEMORY_BASE}/fredrik-profile`).then(r => r.ok ? r.json() : null).catch(() => null);
-    
-    // Fetch index
     const indexResp = await fetch(MEMORY_BASE);
-    if (!indexResp.ok) return "";
+    if (!indexResp.ok) return memoryCache?.data ?? "";
     const index = await indexResp.json();
-    
-    // Fetch all project files in parallel
+
     const projectPromises = (index.projects || []).map((p: { filename: string; project: string }) =>
       fetch(`${MEMORY_BASE}/${p.project}`).then(r => r.ok ? r.json() : null).catch(() => null)
     );
-    
+
     const [profile, ...projects] = await Promise.all([profilePromise, ...projectPromises]);
-    
+
     let memoryBlock = "--- JARVIS PERSISTENT MEMORY ---\n";
-    
     if (profile) {
       memoryBlock += `[PROFILE: Fredrik Bayati]\n${JSON.stringify(profile, null, 2)}\n\n`;
     }
-    
     for (const proj of projects) {
       if (!proj) continue;
       const label = proj.project || "Unknown";
       memoryBlock += `[PROJECT: ${label}]\n${JSON.stringify(proj, null, 2)}\n\n`;
     }
-    
     memoryBlock += "--- END MEMORY ---";
+
+    memoryCache = { data: memoryBlock, timestamp: now };
     return memoryBlock;
   } catch (e) {
     console.error("Failed to fetch memory:", e);
-    return "";
+    return memoryCache?.data ?? "";
   }
 }
 
@@ -177,8 +180,8 @@ serve(async (req) => {
       await handleNewProject(command.value);
     }
 
-    // Fetch persistent memory
-    const memoryContext = await fetchMemory();
+    const bustCache = command.type === "save" || command.type === "new_project";
+    const memoryContext = await fetchMemory(bustCache);
 
     // Build full system prompt with memory + lovable projects registry
     let fullSystemPrompt = memoryContext
