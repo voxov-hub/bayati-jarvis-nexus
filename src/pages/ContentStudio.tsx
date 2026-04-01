@@ -308,6 +308,26 @@ function ImagePanel() {
           placeholder="Describe the image..."
           className="resize-none min-h-[80px]"
         />
+        <div>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 block">
+            Product
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {Object.keys(PRODUCT_TRIGGERS).map((name) => (
+              <button
+                key={name}
+                onClick={() => setSelectedProduct(name)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  selectedProduct === name
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           {IMAGE_TYPES.map((t) => (
             <button
