@@ -180,8 +180,8 @@ serve(async (req) => {
       await handleNewProject(command.value);
     }
 
-    // Fetch persistent memory
-    const memoryContext = await fetchMemory();
+    const bustCache = command.type === "save" || command.type === "new_project";
+    const memoryContext = await fetchMemory(bustCache);
 
     // Build full system prompt with memory + lovable projects registry
     let fullSystemPrompt = memoryContext
