@@ -200,9 +200,17 @@ export function ContentStudio() {
 }
 
 // ── IMAGE PANEL ────────────────────────────────────────────────
+const PRODUCT_TRIGGERS: Record<string, string> = {
+  "Altus Lamp": "VOXOV_ALTUS",
+  "Elysian Lamp": "VOXOV_ELYSIAN",
+  "Altus Shade": "VOXOV_ALTUS_SHADE",
+  "Elysian Shade": "VOXOV_ELYSIAN_SHADE",
+};
+
 function ImagePanel() {
   const [brief, setBrief] = useState("");
   const [imageType, setImageType] = useState<ImageType>("hero");
+  const [selectedProduct, setSelectedProduct] = useState("Altus Lamp");
   const [isGenerating, setIsGenerating] = useState(false);
   const [animStep, setAnimStep] = useState<0 | 1 | 2 | 3>(0);
   const [statusMsg, setStatusMsg] = useState("");
@@ -222,7 +230,7 @@ function ImagePanel() {
     try {
       await readSSE(
         `${PIPELINE_URL}/generate`,
-        { brief: brief.trim(), image_type: imageType },
+        { brief: brief.trim(), image_type: imageType, trigger: PRODUCT_TRIGGERS[selectedProduct] },
         (event) => {
           const step = event.step as string | undefined;
           const status = event.status as string | undefined;
@@ -300,6 +308,26 @@ function ImagePanel() {
           placeholder="Describe the image..."
           className="resize-none min-h-[80px]"
         />
+        <div>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 block">
+            Product
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {Object.keys(PRODUCT_TRIGGERS).map((name) => (
+              <button
+                key={name}
+                onClick={() => setSelectedProduct(name)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  selectedProduct === name
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           {IMAGE_TYPES.map((t) => (
             <button
