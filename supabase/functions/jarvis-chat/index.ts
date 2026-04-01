@@ -265,8 +265,8 @@ serve(async (req) => {
               }
             }
 
-            if (event.type === "content_block_delta" && event.delta?.text) {
-              if (isSaveCommand) fullAssistantResponse += event.delta.text;
+            if (event.type === "content_block_delta" && (event.delta?.text || event.delta?.type === "input_json_delta")) {
+              if (isSaveCommand) fullAssistantResponse += event.delta.text || event.delta.partial_json || "";
               const openAiChunk = {
                 choices: [{ delta: { content: event.delta.text } }],
               };
