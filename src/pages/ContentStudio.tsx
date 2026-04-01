@@ -230,7 +230,7 @@ function ImagePanel() {
     try {
       await readSSE(
         `${PIPELINE_URL}/generate`,
-        { brief: brief.trim(), image_type: imageType },
+        { brief: brief.trim(), image_type: imageType, trigger: PRODUCT_TRIGGERS[selectedProduct] },
         (event) => {
           const step = event.step as string | undefined;
           const status = event.status as string | undefined;
