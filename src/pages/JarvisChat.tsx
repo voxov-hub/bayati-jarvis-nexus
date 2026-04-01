@@ -273,8 +273,9 @@ export default function JarvisChat() {
               });
             }
           } catch {
+            // Line is not yet complete JSON — prepend back and wait for more chunks
             textBuffer = line + "\n" + textBuffer;
-            break;
+            continue;
           }
         }
       }
