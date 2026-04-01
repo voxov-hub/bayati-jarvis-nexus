@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Settings, User, Bell, Database, Palette, Hammer } from "lucide-react";
 import LovableProjectsSettings from "@/components/LovableProjectsSettings";
+import { MemoryManager } from "@/components/memory/MemoryManager";
 
 const sections = [
   { id: "profile", icon: User, label: "Profile", desc: "Name, email, avatar" },
@@ -47,6 +48,8 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+
+        <MemoryManager />
       </div>
     </div>
   );
