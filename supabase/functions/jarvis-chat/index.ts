@@ -271,7 +271,7 @@ serve(async (req) => {
             } else if (event.type === "message_stop") {
               controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
               if (isSaveCommand && fullAssistantResponse) {
-                handleSaveSession(fullAssistantResponse);
+                await handleSaveSession(fullAssistantResponse);
               }
             }
           } catch {
