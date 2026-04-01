@@ -98,6 +98,7 @@ async function handleSaveSession(assistantResponse: string): Promise<void> {
     });
   } catch (e) {
     console.error("Failed to save session memory:", e);
+    throw e;
   }
 }
 
