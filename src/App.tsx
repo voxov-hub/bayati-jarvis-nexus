@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "./components/Layout";
 import JarvisChat from "./pages/JarvisChat";
 import Business from "./pages/Business";
-import ImageStudio from "./pages/ImageStudio";
+import { ContentStudio } from "./pages/ContentStudio";
 import Content from "./pages/Content";
 import Career from "./pages/Career";
 import Life from "./pages/Life";
@@ -26,7 +26,7 @@ const App = () => (
           <Route element={<Layout />}>
             <Route path="/" element={<JarvisChat />} />
             <Route path="/voxov" element={<Business />} />
-            <Route path="/content-studio" element={<ImageStudio />} />
+            <Route path="/content-studio" element={<ContentStudio />} />
             <Route path="/content" element={<Content />} />
             <Route path="/career" element={<Career />} />
             <Route path="/home" element={<Life />} />
