@@ -239,7 +239,7 @@ serve(async (req) => {
     let isSearching = false;
 
     const transformStream = new TransformStream({
-      transform(chunk, controller) {
+      async transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
         const lines = text.split("\n");
 
