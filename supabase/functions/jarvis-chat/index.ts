@@ -98,6 +98,7 @@ async function handleSaveSession(assistantResponse: string): Promise<void> {
     });
   } catch (e) {
     console.error("Failed to save session memory:", e);
+    throw e;
   }
 }
 
@@ -238,7 +239,7 @@ serve(async (req) => {
     let isSearching = false;
 
     const transformStream = new TransformStream({
-      transform(chunk, controller) {
+      async transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
         const lines = text.split("\n");
 
@@ -270,7 +271,7 @@ serve(async (req) => {
             } else if (event.type === "message_stop") {
               controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
               if (isSaveCommand && fullAssistantResponse) {
-                handleSaveSession(fullAssistantResponse);
+                await handleSaveSession(fullAssistantResponse);
               }
             }
           } catch {
