@@ -48,40 +48,40 @@ The prompt should follow Lovable best practices: clear, concise, actionable inst
 
 Available Lovable projects (sent from frontend): Check the lovable_projects field in the request for the current registry.`;
 
-async function fetchMemory(): Promise<string> {
+async function fetchMemory(bustCache = false): Promise<string> {
+  const now = Date.now();
+  if (!bustCache && memoryCache && (now - memoryCache.timestamp) < MEMORY_CACHE_TTL) {
+    return memoryCache.data;
+  }
+
   try {
-    // Always fetch the profile
     const profilePromise = fetch(`${MEMORY_BASE}/fredrik-profile`).then(r => r.ok ? r.json() : null).catch(() => null);
-    
-    // Fetch index
     const indexResp = await fetch(MEMORY_BASE);
-    if (!indexResp.ok) return "";
+    if (!indexResp.ok) return memoryCache?.data ?? "";
     const index = await indexResp.json();
-    
-    // Fetch all project files in parallel
+
     const projectPromises = (index.projects || []).map((p: { filename: string; project: string }) =>
       fetch(`${MEMORY_BASE}/${p.project}`).then(r => r.ok ? r.json() : null).catch(() => null)
     );
-    
+
     const [profile, ...projects] = await Promise.all([profilePromise, ...projectPromises]);
-    
+
     let memoryBlock = "--- JARVIS PERSISTENT MEMORY ---\n";
-    
     if (profile) {
       memoryBlock += `[PROFILE: Fredrik Bayati]\n${JSON.stringify(profile, null, 2)}\n\n`;
     }
-    
     for (const proj of projects) {
       if (!proj) continue;
       const label = proj.project || "Unknown";
       memoryBlock += `[PROJECT: ${label}]\n${JSON.stringify(proj, null, 2)}\n\n`;
     }
-    
     memoryBlock += "--- END MEMORY ---";
+
+    memoryCache = { data: memoryBlock, timestamp: now };
     return memoryBlock;
   } catch (e) {
     console.error("Failed to fetch memory:", e);
-    return "";
+    return memoryCache?.data ?? "";
   }
 }
 
