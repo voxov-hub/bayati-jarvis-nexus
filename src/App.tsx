@@ -25,11 +25,11 @@ const App = () => (
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<JarvisChat />} />
-            <Route path="/business" element={<Business />} />
-            <Route path="/image-studio" element={<ImageStudio />} />
+            <Route path="/voxov" element={<Business />} />
+            <Route path="/content-studio" element={<ImageStudio />} />
             <Route path="/content" element={<Content />} />
             <Route path="/career" element={<Career />} />
-            <Route path="/life" element={<Life />} />
+            <Route path="/home" element={<Life />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>

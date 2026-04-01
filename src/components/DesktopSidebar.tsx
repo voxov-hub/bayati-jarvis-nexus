@@ -3,7 +3,6 @@ import {
   MessageSquare,
   Briefcase,
   ImageIcon,
-  FileText,
   TrendingUp,
   Heart,
   LayoutDashboard,
@@ -11,17 +10,16 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { label: "Jarvis", path: "/", icon: MessageSquare },
-  { label: "Business", path: "/business", icon: Briefcase },
-  { label: "Image Studio", path: "/image-studio", icon: ImageIcon },
-  { label: "Content", path: "/content", icon: FileText },
-  { label: "Career", path: "/career", icon: TrendingUp },
-  { label: "Life", path: "/life", icon: Heart },
-  { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+  { label: "Jarvis", path: "/", icon: MessageSquare, wip: false },
+  { label: "Content Studio", path: "/content-studio", icon: ImageIcon, wip: true },
+  { label: "Voxov Design", path: "/voxov", icon: Briefcase, wip: true },
+  { label: "Career", path: "/career", icon: TrendingUp, wip: true },
+  { label: "Home", path: "/home", icon: Heart, wip: true },
 ];
 
 const bottomItems = [
-  { label: "Settings", path: "/settings", icon: Settings },
+  { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard, wip: false },
+  { label: "Settings", path: "/settings", icon: Settings, wip: false },
 ];
 
 export function DesktopSidebar() {
@@ -50,8 +48,13 @@ export function DesktopSidebar() {
                   : "text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-fg-active"
               }`}
             >
-              <item.icon className={`w-4 h-4 ${active ? "text-sidebar-accent" : ""}`} />
-              {item.label}
+              <item.icon className={`w-4 h-4 shrink-0 ${active ? "text-sidebar-accent" : ""}`} />
+              <span className="flex-1">{item.label}</span>
+              {item.wip && (
+                <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-sidebar-hover text-sidebar-fg opacity-50">
+                  WIP
+                </span>
+              )}
             </Link>
           );
         })}
@@ -71,7 +74,7 @@ export function DesktopSidebar() {
                   : "text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-fg-active"
               }`}
             >
-              <item.icon className={`w-4 h-4 ${active ? "text-sidebar-accent" : ""}`} />
+              <item.icon className={`w-4 h-4 shrink-0 ${active ? "text-sidebar-accent" : ""}`} />
               {item.label}
             </Link>
           );

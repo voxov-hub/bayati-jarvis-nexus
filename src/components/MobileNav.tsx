@@ -5,29 +5,25 @@ import {
   ImageIcon,
   LayoutDashboard,
   MoreHorizontal,
-} from "lucide-react";
-import { useState } from "react";
-import {
-  FileText,
   TrendingUp,
   Heart,
   Settings,
   X,
 } from "lucide-react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 const mainTabs = [
-  { label: "Jarvis", path: "/", icon: MessageSquare },
-  { label: "Business", path: "/business", icon: Briefcase },
-  { label: "Studio", path: "/image-studio", icon: ImageIcon },
-  { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+  { label: "Jarvis", path: "/", icon: MessageSquare, wip: false },
+  { label: "Studio", path: "/content-studio", icon: ImageIcon, wip: true },
+  { label: "Voxov", path: "/voxov", icon: Briefcase, wip: true },
+  { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard, wip: false },
 ];
 
 const moreTabs = [
-  { label: "Content", path: "/content", icon: FileText },
-  { label: "Career", path: "/career", icon: TrendingUp },
-  { label: "Life", path: "/life", icon: Heart },
-  { label: "Settings", path: "/settings", icon: Settings },
+  { label: "Career", path: "/career", icon: TrendingUp, wip: true },
+  { label: "Home", path: "/home", icon: Heart, wip: true },
+  { label: "Settings", path: "/settings", icon: Settings, wip: false },
 ];
 
 export function MobileNav() {
@@ -46,16 +42,19 @@ export function MobileNav() {
             exit={{ opacity: 0, y: 20 }}
             className="fixed inset-x-0 bottom-16 z-50 px-4 pb-2 md:hidden"
           >
-            <div className="bg-sidebar-bg rounded-xl border border-sidebar-border p-3 grid grid-cols-4 gap-2">
+            <div className="bg-sidebar-bg rounded-xl border border-sidebar-border p-3 grid grid-cols-3 gap-2">
               {moreTabs.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
                   onClick={() => setShowMore(false)}
-                  className="flex flex-col items-center gap-1 py-2 rounded-lg text-sidebar-fg hover:text-sidebar-fg-active"
+                  className="relative flex flex-col items-center gap-1 py-2 rounded-lg text-sidebar-fg hover:text-sidebar-fg-active"
                 >
                   <item.icon className="w-5 h-5" />
                   <span className="text-[10px]">{item.label}</span>
+                  {item.wip && (
+                    <span className="absolute top-0.5 right-2 w-1.5 h-1.5 rounded-full bg-sidebar-fg opacity-30" />
+                  )}
                 </Link>
               ))}
             </div>
@@ -73,12 +72,15 @@ export function MobileNav() {
                 key={item.path}
                 to={item.path}
                 onClick={() => setShowMore(false)}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1 ${
+                className={`relative flex flex-col items-center gap-0.5 px-3 py-1 ${
                   active ? "text-sidebar-accent" : "text-sidebar-fg"
                 }`}
               >
                 <item.icon className="w-5 h-5" />
                 <span className="text-[10px] font-medium">{item.label}</span>
+                {item.wip && (
+                  <span className="absolute top-0.5 right-2 w-1.5 h-1.5 rounded-full bg-sidebar-fg opacity-30" />
+                )}
               </Link>
             );
           })}
