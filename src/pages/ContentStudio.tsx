@@ -257,14 +257,16 @@ function ImagePanel() {
           }
           if (step === "review" && status === "done" && event.review) {
             const r = event.review as Record<string, unknown>;
-            setResult((prev) => ({
-              ...prev,
-              imageUrl: prev?.imageUrl ?? "",
-              brandScore: r.brand_score as number | undefined,
-              purposeScore: r.purpose_score as number | undefined,
-              feelScore: r.feel_score as number | undefined,
-              approved: r.approved as boolean | undefined,
-            }));
+            setResult((prev) => {
+              const base = prev ?? { imageUrl: "" };
+              return {
+                ...base,
+                brandScore: r.brand_score as number | undefined,
+                purposeScore: r.purpose_score as number | undefined,
+                feelScore: r.feel_score as number | undefined,
+                approved: r.approved as boolean | undefined,
+              };
+            });
           }
           if (step === "complete") {
             setResult((prev) => ({
