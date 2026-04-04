@@ -364,7 +364,7 @@ function ImagePanel() {
 
       {/* Result */}
       {!isGenerating && result?.imageUrl && (
-        <div className="space-y-4 animate-fade-in">
+        <div className="space-y-4">
           {result.promptText && (
             <p className="text-xs text-muted-foreground italic">{result.promptText}</p>
           )}
