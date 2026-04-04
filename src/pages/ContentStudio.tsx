@@ -1,16 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import {
-  ImageIcon,
-  FileText,
-  Globe,
-  Video,
-  Sparkles,
-  Download,
-  RefreshCw,
-  Copy,
-  Check,
-  ArrowLeft,
-} from "lucide-react";
+import { ImageIcon, FileText, Globe, Video, Sparkles, Download, RefreshCw, Copy, Check } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,7 +26,13 @@ const IMAGE_TYPES: { id: ImageType; label: string }[] = [
   { id: "detail", label: "Detail" },
 ];
 
-// ── SSE reader helper ──────────────────────────────────────────
+const PRODUCT_TRIGGERS: Record<string, string> = {
+  "Altus Lamp": "VOXOV_ALTUS",
+  "Elysian Lamp": "VOXOV_ELYSIAN",
+  "Altus Shade": "VOXOV_ALTUS_SHADE",
+  "Elysian Shade": "VOXOV_ELYSIAN_SHADE",
+};
+
 async function readSSE(
   url: string,
   body: Record<string, unknown>,
@@ -51,11 +46,9 @@ async function readSSE(
     signal,
   });
   if (!response.ok || !response.body) throw new Error("Pipeline request failed");
-
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -64,17 +57,11 @@ async function readSSE(
     buffer = lines.pop() ?? "";
     for (const line of lines) {
       if (!line.startsWith("data: ")) continue;
-      try {
-        const event = JSON.parse(line.slice(6)) as Record<string, unknown>;
-        onEvent(event);
-      } catch {
-        continue;
-      }
+      try { onEvent(JSON.parse(line.slice(6)) as Record<string, unknown>); } catch { continue; }
     }
   }
 }
 
-// ── Image tab state ────────────────────────────────────────────
 interface ImageResult {
   imageUrl: string;
   filename?: string;
@@ -86,7 +73,6 @@ interface ImageResult {
   promptText?: string;
 }
 
-// ── Copy variant ───────────────────────────────────────────────
 interface CopyVariant {
   content: string;
   headline?: string;
@@ -94,10 +80,8 @@ interface CopyVariant {
   body?: string;
 }
 
-// ── CopyCard ───────────────────────────────────────────────────
 function CopyCard({ variant, isWeb }: { variant: CopyVariant; isWeb?: boolean }) {
   const [copied, setCopied] = useState(false);
-
   const handleCopy = useCallback(() => {
     const text = isWeb
       ? [variant.headline, variant.subheading, variant.body].filter(Boolean).join("\n\n")
@@ -107,7 +91,6 @@ function CopyCard({ variant, isWeb }: { variant: CopyVariant; isWeb?: boolean })
       setTimeout(() => setCopied(false), 2000);
     });
   }, [variant, isWeb]);
-
   return (
     <Card className="border-border">
       <CardContent className="p-4 space-y-3">
@@ -115,25 +98,19 @@ function CopyCard({ variant, isWeb }: { variant: CopyVariant; isWeb?: boolean })
           <>
             {variant.headline && (
               <div>
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                  Headline
-                </span>
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Headline</span>
                 <p className="font-heading font-semibold text-foreground mt-0.5">{variant.headline}</p>
               </div>
             )}
             {variant.subheading && (
               <div>
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                  Subheading
-                </span>
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Subheading</span>
                 <p className="text-sm text-foreground/80 mt-0.5">{variant.subheading}</p>
               </div>
             )}
             {variant.body && (
               <div>
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                  Body
-                </span>
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Body</span>
                 <p className="text-sm text-foreground/70 mt-0.5 whitespace-pre-wrap">{variant.body}</p>
               </div>
             )}
@@ -150,13 +127,10 @@ function CopyCard({ variant, isWeb }: { variant: CopyVariant; isWeb?: boolean })
   );
 }
 
-// ── Main Component ─────────────────────────────────────────────
 export function ContentStudio() {
   const [activeTab, setActiveTab] = useState<ContentTab>("image");
-
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Header */}
       <header className="px-4 md:px-8 py-4 border-b border-border">
         <h1 className="font-heading text-lg font-semibold flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-primary" />
@@ -164,8 +138,6 @@ export function ContentStudio() {
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">Voxov Design content pipeline</p>
       </header>
-
-      {/* Tab bar */}
       <div className="px-4 md:px-8 border-b border-border overflow-x-auto">
         <div className="flex gap-1 min-w-max">
           {TABS.map((tab) => {
@@ -174,11 +146,7 @@ export function ContentStudio() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                  active
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
               >
                 <tab.icon className="w-4 h-4" />
                 {tab.label}
@@ -187,8 +155,6 @@ export function ContentStudio() {
           })}
         </div>
       </div>
-
-      {/* Panel */}
       <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6">
         {activeTab === "image" && <ImagePanel />}
         {activeTab === "social" && <CopyPanel copyType="social" />}
@@ -198,14 +164,6 @@ export function ContentStudio() {
     </div>
   );
 }
-
-// ── IMAGE PANEL ────────────────────────────────────────────────
-const PRODUCT_TRIGGERS: Record<string, string> = {
-  "Altus Lamp": "VOXOV_ALTUS",
-  "Elysian Lamp": "VOXOV_ELYSIAN",
-  "Altus Shade": "VOXOV_ALTUS_SHADE",
-  "Elysian Shade": "VOXOV_ELYSIAN_SHADE",
-};
 
 function ImagePanel() {
   const [brief, setBrief] = useState("");
@@ -223,10 +181,9 @@ function ImagePanel() {
     setResult(null);
     setAnimStep(0);
     setStatusMsg("Starting pipeline...");
-
     const controller = new AbortController();
     abortRef.current = controller;
-
+    let finalResult: ImageResult | null = null;
     try {
       await readSSE(
         `${PIPELINE_URL}/generate`,
@@ -234,14 +191,11 @@ function ImagePanel() {
         (event) => {
           const step = event.step as string | undefined;
           const status = event.status as string | undefined;
-
-          if (step === "prompt" && status === "thinking") {
-            setAnimStep(1);
-            setStatusMsg("Crafting prompt...");
-          }
+          if (step === "prompt" && status === "thinking") { setAnimStep(1); setStatusMsg("Crafting prompt..."); }
           if (step === "prompt" && status === "done") {
-            setStatusMsg(typeof event.message === "string" ? event.message : "Prompt ready");
-            setResult((prev) => ({ ...prev, imageUrl: "", promptText: event.message as string }));
+            const msg = event.message as string | undefined;
+            setStatusMsg(msg ?? "Prompt ready");
+            if (msg) finalResult = { ...(finalResult ?? { imageUrl: "" }), promptText: msg };
           }
           if (step === "generate" && status === "thinking") {
             setAnimStep(2);
@@ -249,51 +203,39 @@ function ImagePanel() {
             setStatusMsg(iter ? `Generating image (attempt ${iter})...` : "Generating image...");
           }
           if (step === "generate" && status === "done" && typeof event.image_url === "string") {
-            setResult((prev) => ({ ...(prev ?? { imageUrl: "" }), imageUrl: event.image_url as string }));
+            finalResult = { ...(finalResult ?? { imageUrl: "" }), imageUrl: event.image_url as string };
           }
-          if (step === "review" && status === "thinking") {
-            setAnimStep(3);
-            setStatusMsg("Reviewing against brand guidelines...");
-          }
+          if (step === "review" && status === "thinking") { setAnimStep(3); setStatusMsg("Reviewing against brand..."); }
           if (step === "review" && status === "done" && event.review) {
             const r = event.review as Record<string, unknown>;
-            setResult((prev) => {
-              const base = prev ?? { imageUrl: "" };
-              return {
-                ...base,
-                brandScore: r.brand_score as number | undefined,
-                purposeScore: r.purpose_score as number | undefined,
-                feelScore: r.feel_score as number | undefined,
-                approved: r.approved as boolean | undefined,
-              };
-            });
+            finalResult = {
+              ...(finalResult ?? { imageUrl: "" }),
+              brandScore: r.brand_score as number | undefined,
+              purposeScore: r.purpose_score as number | undefined,
+              feelScore: r.feel_score as number | undefined,
+              approved: r.approved as boolean | undefined,
+            };
           }
           if (step === "complete") {
-            
-            const finalUrl = (event.image_url as string | undefined) || "";
-            setResult((prev) => {
-              const base = prev ?? { imageUrl: "" };
-              return {
-                ...base,
-                imageUrl: finalUrl || base.imageUrl || "",
-                filename: event.filename as string | undefined,
-                iterations: event.iterations as number | undefined,
-                approved: status === "approved",
-              };
-            });
-            setStatusMsg("");
-            // delay so result state settles before hiding animation
-            setTimeout(() => setIsGenerating(false), 100);
+            const url = (event.image_url as string | undefined) ?? finalResult?.imageUrl ?? "";
+            finalResult = {
+              ...(finalResult ?? { imageUrl: "" }),
+              imageUrl: url,
+              filename: event.filename as string | undefined,
+              iterations: event.iterations as number | undefined,
+              approved: status === "approved",
+            };
           }
         },
         controller.signal,
       );
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error("Unknown error");
-      if (error.name !== "AbortError") {
-        toast.error(error.message);
-      }
+      if (error.name !== "AbortError") toast.error(error.message);
+    } finally {
+      if (finalResult?.imageUrl) setResult(finalResult);
       setIsGenerating(false);
+      setStatusMsg("");
     }
   };
 
@@ -301,34 +243,22 @@ function ImagePanel() {
     if (!result?.imageUrl) return;
     const a = document.createElement("a");
     a.href = result.imageUrl;
-    a.download = result.filename ?? "voxov-image.png";
+    a.download = result.filename ?? "voxov-image.jpg";
     a.click();
   };
 
   return (
     <div className="max-w-2xl space-y-6">
-      {/* Input */}
       <div className="space-y-3">
-        <Textarea
-          value={brief}
-          onChange={(e) => setBrief(e.target.value)}
-          placeholder="Describe the image..."
-          className="resize-none min-h-[80px]"
-        />
+        <Textarea value={brief} onChange={(e) => setBrief(e.target.value)} placeholder="Describe the scene..." className="resize-none min-h-[80px]" />
         <div>
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 block">
-            Product
-          </span>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 block">Product</span>
           <div className="flex flex-wrap gap-2">
             {Object.keys(PRODUCT_TRIGGERS).map((name) => (
               <button
                 key={name}
                 onClick={() => setSelectedProduct(name)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  selectedProduct === name
-                    ? "bg-primary text-primary-foreground"
-                    : "border border-border text-muted-foreground hover:bg-muted"
-                }`}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${selectedProduct === name ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-muted"}`}
               >
                 {name}
               </button>
@@ -340,59 +270,32 @@ function ImagePanel() {
             <button
               key={t.id}
               onClick={() => setImageType(t.id)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                imageType === t.id
-                  ? "bg-primary text-primary-foreground"
-                  : "border border-border text-foreground hover:bg-muted"
-              }`}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${imageType === t.id ? "bg-primary text-primary-foreground" : "border border-border text-foreground hover:bg-muted"}`}
             >
               {t.label}
             </button>
           ))}
         </div>
-        <Button
-          onClick={generate}
-          disabled={!brief.trim() || isGenerating}
-          className="w-full md:w-auto gap-2"
-        >
-          <Sparkles className="w-4 h-4" />
-          Generate
+        <Button onClick={generate} disabled={!brief.trim() || isGenerating} className="w-full md:w-auto gap-2">
+          <Sparkles className="w-4 h-4" />Generate
         </Button>
       </div>
-
-      {/* Generating animation */}
       {isGenerating && <GeneratingAnimation currentStep={animStep} statusMessage={statusMsg} />}
-
-      {/* Result */}
       {!isGenerating && result?.imageUrl && (
         <div className="space-y-4">
-          {result.promptText && (
-            <p className="text-xs text-muted-foreground italic">{result.promptText}</p>
-          )}
-          <img
-            src={result.imageUrl}
-            alt="Generated image"
-            className="w-full rounded-lg border border-border"
-          />
+          {result.promptText && <p className="text-xs text-muted-foreground italic">{result.promptText}</p>}
+          <img src={result.imageUrl} alt="Generated Voxov image" className="w-full rounded-lg border border-border" />
           <div className="flex flex-wrap gap-2">
             <ScoreBadge label="Brand" score={result.brandScore} />
             <ScoreBadge label="Purpose" score={result.purposeScore} />
             <ScoreBadge label="Feel" score={result.feelScore} />
           </div>
           <p className="text-sm font-medium text-foreground">
-            {result.approved
-              ? "Approved ✓"
-              : `Best result after ${result.iterations ?? 1} iteration${(result.iterations ?? 1) > 1 ? "s" : ""}`}
+            {result.approved ? "Approved ✓" : `Best result after ${result.iterations ?? 1} iteration${(result.iterations ?? 1) > 1 ? "s" : ""}`}
           </p>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleDownload} className="gap-1.5">
-              <Download className="w-3.5 h-3.5" />
-              Download
-            </Button>
-            <Button variant="outline" size="sm" onClick={generate} className="gap-1.5">
-              <RefreshCw className="w-3.5 h-3.5" />
-              Generate again
-            </Button>
+            <Button variant="outline" size="sm" onClick={handleDownload} className="gap-1.5"><Download className="w-3.5 h-3.5" />Download</Button>
+            <Button variant="outline" size="sm" onClick={generate} className="gap-1.5"><RefreshCw className="w-3.5 h-3.5" />Generate again</Button>
           </div>
         </div>
       )}
@@ -400,7 +303,6 @@ function ImagePanel() {
   );
 }
 
-// ── COPY PANEL ─────────────────────────────────────────────────
 function CopyPanel({ copyType }: { copyType: "social" | "web" }) {
   const [brief, setBrief] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -411,11 +313,9 @@ function CopyPanel({ copyType }: { copyType: "social" | "web" }) {
   const generate = async () => {
     if (!brief.trim() || isGenerating) return;
     setIsGenerating(true);
-    setVariants([]);
-
+    const finalVariants: CopyVariant[] = [];
     const controller = new AbortController();
     abortRef.current = controller;
-
     try {
       await readSSE(
         `${PIPELINE_URL}/generate/copy`,
@@ -423,31 +323,22 @@ function CopyPanel({ copyType }: { copyType: "social" | "web" }) {
         (event) => {
           if (event.step === "writing" && event.status === "progress" && event.content) {
             const content = event.content as string;
+            let variant: CopyVariant;
             if (isWeb) {
-              // Try to parse structured web copy
               const lines = content.split("\n").filter(Boolean);
-              const variant: CopyVariant = {
-                content,
-                headline: lines[0] ?? "",
-                subheading: lines[1] ?? "",
-                body: lines.slice(2).join("\n"),
-              };
-              setVariants((prev) => [...prev, variant]);
+              variant = { content, headline: lines[0] ?? "", subheading: lines[1] ?? "", body: lines.slice(2).join("\n") };
             } else {
-              setVariants((prev) => [...prev, { content }]);
+              variant = { content };
             }
-          }
-          if (event.step === "complete") {
-            setIsGenerating(false);
+            finalVariants.push(variant);
+            setVariants([...finalVariants]);
           }
         },
         controller.signal,
       );
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error("Unknown error");
-      if (error.name !== "AbortError") {
-        toast.error(error.message);
-      }
+      if (error.name !== "AbortError") toast.error(error.message);
     } finally {
       setIsGenerating(false);
     }
@@ -456,54 +347,34 @@ function CopyPanel({ copyType }: { copyType: "social" | "web" }) {
   return (
     <div className="max-w-2xl space-y-6">
       <div className="space-y-3">
-        <Textarea
-          value={brief}
-          onChange={(e) => setBrief(e.target.value)}
-          placeholder="What's this post about?"
-          className="resize-none min-h-[80px]"
-        />
-        <Button
-          onClick={generate}
-          disabled={!brief.trim() || isGenerating}
-          className="w-full md:w-auto gap-2"
-        >
-          <Sparkles className="w-4 h-4" />
-          Generate
+        <Textarea value={brief} onChange={(e) => setBrief(e.target.value)} placeholder={isWeb ? "What page or section is this for?" : "What's this post about?"} className="resize-none min-h-[80px]" />
+        <Button onClick={generate} disabled={!brief.trim() || isGenerating} className="w-full md:w-auto gap-2">
+          <Sparkles className="w-4 h-4" />Generate
         </Button>
       </div>
-
       {isGenerating && variants.length === 0 && (
         <p className="text-sm text-muted-foreground animate-pulse">Writing...</p>
       )}
-
       {variants.length > 0 && (
-        <div className="space-y-4 animate-fade-in">
+        <div className="space-y-4">
           <h3 className="font-heading text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             {variants.length} variant{variants.length !== 1 ? "s" : ""}
           </h3>
-          {variants.map((v, i) => (
-            <CopyCard key={i} variant={v} isWeb={isWeb} />
-          ))}
+          {variants.map((v, i) => <CopyCard key={i} variant={v} isWeb={isWeb} />)}
         </div>
       )}
     </div>
   );
 }
 
-// ── VIDEO PANEL (coming soon) ──────────────────────────────────
 function VideoPanel() {
   return (
     <Card className="max-w-lg mx-auto border-border">
       <CardContent className="flex flex-col items-center text-center p-8 space-y-6">
         <GeneratingAnimation currentStep={0} statusMessage="" />
         <div className="space-y-2">
-          <h3 className="font-heading text-lg font-semibold text-foreground">
-            Video generation is coming soon
-          </h3>
-          <p className="text-sm text-muted-foreground max-w-sm">
-            This feature will be powered by your Voxov product LoRA — trained on your photoshoot
-            imagery for consistent brand visuals.
-          </p>
+          <h3 className="font-heading text-lg font-semibold text-foreground">Video generation is coming soon</h3>
+          <p className="text-sm text-muted-foreground max-w-sm">This feature will be powered by your Voxov product LoRA — trained on your photoshoot imagery for consistent brand visuals.</p>
         </div>
       </CardContent>
     </Card>
