@@ -249,7 +249,7 @@ function ImagePanel() {
             setStatusMsg(iter ? `Generating image (attempt ${iter})...` : "Generating image...");
           }
           if (step === "generate" && status === "done" && typeof event.image_url === "string") {
-            setResult((prev) => ({ ...prev, imageUrl: event.image_url as string }));
+            setResult((prev) => ({ ...(prev ?? { imageUrl: "" }), imageUrl: event.image_url as string }));
           }
           if (step === "review" && status === "thinking") {
             setAnimStep(3);
@@ -257,23 +257,29 @@ function ImagePanel() {
           }
           if (step === "review" && status === "done" && event.review) {
             const r = event.review as Record<string, unknown>;
-            setResult((prev) => ({
-              ...prev,
-              imageUrl: prev?.imageUrl ?? "",
-              brandScore: r.brand_score as number | undefined,
-              purposeScore: r.purpose_score as number | undefined,
-              feelScore: r.feel_score as number | undefined,
-              approved: r.approved as boolean | undefined,
-            }));
+            setResult((prev) => {
+              const base = prev ?? { imageUrl: "" };
+              return {
+                ...base,
+                brandScore: r.brand_score as number | undefined,
+                purposeScore: r.purpose_score as number | undefined,
+                feelScore: r.feel_score as number | undefined,
+                approved: r.approved as boolean | undefined,
+              };
+            });
           }
           if (step === "complete") {
-            setResult((prev) => ({
-              ...prev,
-              imageUrl: (event.image_url as string) ?? prev?.imageUrl ?? "",
-              filename: event.filename as string | undefined,
-              iterations: event.iterations as number | undefined,
-              approved: status === "approved",
-            }));
+            const finalUrl = (event.image_url as string | undefined) || "";
+            setResult((prev) => {
+              const base = prev ?? { imageUrl: "" };
+              return {
+                ...base,
+                imageUrl: finalUrl || base.imageUrl || "",
+                filename: event.filename as string | undefined,
+                iterations: event.iterations as number | undefined,
+                approved: status === "approved",
+              };
+            });
             setIsGenerating(false);
             setStatusMsg("");
           }
