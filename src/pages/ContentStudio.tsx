@@ -281,8 +281,9 @@ function ImagePanel() {
                 approved: status === "approved",
               };
             });
-            setIsGenerating(false);
             setStatusMsg("");
+            // delay so result state settles before hiding animation
+            setTimeout(() => setIsGenerating(false), 100);
           }
         },
         controller.signal,
@@ -292,7 +293,6 @@ function ImagePanel() {
       if (error.name !== "AbortError") {
         toast.error(error.message);
       }
-    } finally {
       setIsGenerating(false);
     }
   };
