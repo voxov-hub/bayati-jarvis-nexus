@@ -269,13 +269,17 @@ function ImagePanel() {
             });
           }
           if (step === "complete") {
-            setResult((prev) => ({
-              ...prev,
-              imageUrl: (event.image_url as string) ?? prev?.imageUrl ?? "",
-              filename: event.filename as string | undefined,
-              iterations: event.iterations as number | undefined,
-              approved: status === "approved",
-            }));
+            const finalUrl = (event.image_url as string | undefined) || "";
+            setResult((prev) => {
+              const base = prev ?? { imageUrl: "" };
+              return {
+                ...base,
+                imageUrl: finalUrl || base.imageUrl || "",
+                filename: event.filename as string | undefined,
+                iterations: event.iterations as number | undefined,
+                approved: status === "approved",
+              };
+            });
             setIsGenerating(false);
             setStatusMsg("");
           }
