@@ -249,7 +249,7 @@ function ImagePanel() {
             setStatusMsg(iter ? `Generating image (attempt ${iter})...` : "Generating image...");
           }
           if (step === "generate" && status === "done" && typeof event.image_url === "string") {
-            setResult((prev) => ({ ...prev, imageUrl: event.image_url as string }));
+            setResult((prev) => ({ ...(prev ?? { imageUrl: "" }), imageUrl: event.image_url as string }));
           }
           if (step === "review" && status === "thinking") {
             setAnimStep(3);
