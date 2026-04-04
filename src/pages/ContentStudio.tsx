@@ -269,7 +269,7 @@ function ImagePanel() {
             });
           }
           if (step === "complete") {
-            console.log("complete event", event);
+            
             const finalUrl = (event.image_url as string | undefined) || "";
             setResult((prev) => {
               const base = prev ?? { imageUrl: "" };
